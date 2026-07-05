@@ -122,7 +122,6 @@
         const t = parseFloat(document.getElementById('thickness').value);
         const thetaDeg = parseFloat(document.getElementById('angle').value);
         
-        // Use Inside Radius of branch for the cutting boundary calculations
         const R_b = R_b_ext - t; 
         const theta = thetaDeg * (Math.PI / 180);
 
@@ -136,11 +135,8 @@
         let maxDepth = 0;
         let minDepth = Infinity;
 
-        // Calculate lengths for 8 standard ordinate locations around the circumference
         for (let i = 0; i <= 8; i++) {
-            const alpha = (i * 45) * (Math.PI / 180); // 0, 45, 90, 135, 180...
-            
-            // Standard analytical pipe branching formula for fish-mouth cuts
+            const alpha = (i * 45) * (Math.PI / 180);
             const sinAlpha = Math.sin(alpha);
             const cosAlpha = Math.cos(alpha);
             
@@ -152,10 +148,8 @@
             if (y < minDepth) minDepth = y;
         }
 
-        // Normalize template lines to measure from a baseline (0mm offset)
         const templateLengths = points.map(y => y - minDepth);
 
-        // Populate table tracking positions around the wrap perimeter
         for (let i = 0; i < 8; i++) {
             const tr = document.createElement('tr');
             const ptAngle = i * 45;
@@ -169,7 +163,6 @@
             tableBody.appendChild(tr);
         }
 
-        // Render visual path flat template wrapper layout profile
         const rect = canvas.getBoundingClientRect();
         const w = rect.width;
         const h = rect.height;
@@ -191,14 +184,12 @@
         const graphWidth = w - 40;
         for (let i = 0; i <= 8; i++) {
             const gx = 20 + (i * (graphWidth / 8));
-            // Standard scale factor to fit drawing dynamically within the preview box
             const gy = (h / 2) + (points[i] - (maxDepth + minDepth)/2) * 1.5; 
             if (i === 0) ctx.moveTo(gx, gy);
             else ctx.lineTo(gx, gy);
         }
         ctx.stroke();
 
-        // Draw bounding labels
         ctx.fillStyle = '#888';
         ctx.font = '10px monospace';
         ctx.textAlign = 'left';
@@ -209,7 +200,6 @@
         ctx.fillText("360°", w - 20, h - 10);
     }
 
-    // Event hooks
     document.getElementById('headerOD').addEventListener('input', calculateBranch);
     document.getElementById('branchOD').addEventListener('input', calculateBranch);
     document.getElementById('thickness').addEventListener('input', calculateBranch);
@@ -221,4 +211,3 @@
 
 </body>
 </html>
-
