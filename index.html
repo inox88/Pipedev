@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Pipe Branch Template Generator</title>
+    <style>
+        body {
+            background-color: #121212;
+            color: #ffffff;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            padding: 15px;
+            margin: 0;
+            box-sizing: border-box;
+        }
+        .container {
+            max-width: 500px;
+            margin: 0 auto;
+            background: #1e1e1e;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.5);
+        }
+        h2 { text-align: center; color: #00ffcc; margin-top: 0; margin-bottom: 15px; font-size: 16px; letter-spacing: 1px; }
+        .input-group { margin-bottom: 12px; }
+        label { display: block; margin-bottom: 4px; font-weight: bold; color: #bbbbbb; font-size: 14px; }
+        input[type="number"] {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #333;
+            border-radius: 4px;
+            background: #2a2a2a;
+            color: #fff;
+            font-size: 16px;
+            box-sizing: border-box;
+        }
+        .row { display: flex; gap: 8px; }
+        .row > div { flex: 1; }
+        #canvas-container {
+            width: 100%;
+            height: 200px;
+            background: #09090b;
+            border-radius: 4px;
+            margin-top: 15px;
+            border: 1px solid #27272a;
+        }
+        canvas { width: 100%; height: 100%; display: block; }
+        .table-title { margin-top: 15px; margin-bottom: 6px; font-size: 14px; color: #00ffcc; font-weight: bold; }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            background: #252525;
+            border-radius: 4px;
+            overflow: hidden;
+            font-size: 14px;
+        }
+        th, td { padding: 10px; text-align: left; border-bottom: 1px solid #333; }
+        th { background: #2d2d2d; color: #bbbbbb; }
+        td.highlight { font-weight: bold; color: #00ffcc; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>PIPE BRANCH TEMPLATE GENERATOR</h2>
+    
+    <div class="input-group">
+        <label>Header Pipe OD (mm)</label>
+        <input type="number" id="headerOD" value="114.3" step="0.1">
+    </div>
+
+    <div class="input-group">
+        <label>Branch Pipe OD (mm)</label>
+        <input type="number" id="branchOD" value="60.3" step="0.1">
+    </div>
+
+    <div class="row">
+        <div class="input-group">
+            <label>Branch Wall Thickness (mm)</label>
+            <input type="number" id="thickness" value="3.9" step="0.1">
+        </div>
+        <div class="input-group">
+            <label>Intersection Angle (°)</label>
+            <input type="number" id="angle" value="90" step="0.5">
+        </div>
+    </div>
+
+    <div id="canvas-container">
+        <canvas id="templateCanvas"></canvas>
+    </div>
+
+    <div class="table-title">WRAP TEMPLATE ORDINATE LINES (8-Points)</div>
+    <table>
+        <thead>
+            <tr>
+                <th>Point Reference</th>
+                <th>Distance Around Wrap</th>
+                <th>Cut Depth (from base line)</th>
+            </tr>
+        </thead>
+        <tbody id="tableBody">
+            </tbody>
+    </table>
+</div>
+
+<script>
+    const canvas = document.getElementById('templateCanvas');
+    const ctx = canvas.getContext('2d');
+
+    function resizeCanvas() {
+        const rect = canvas.parentElement.getBoundingClientRect();
+        canvas.width = rect.width * window.devicePixelRatio;
+        canvas.height = rect.height * window.devicePixelRatio;
+        canvas.style.width = rect.width + 'px';
+        canvas.style.height = rect.height + 'px';
+        ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+    }
+
+    function calculateBranch() {
+        const R_h = parseFloat(document.getElementById('headerOD').value) / 2;
+        const R_b_ext = parseFloat(document.getElementById('branchOD').value) / 2;
+        const t = parseFloat(document.getElementById('thickness').value);
+        const thetaDeg = parseFloat(document.getElementById('angle').value);
+        
+        // Use Inside Radius of branch for the cutting boundary calculations
+        const R_b = R_b_ext - t; 
+        const theta = thetaDeg * (Math.PI / 180);
+
+        const tableBody = document.getElementById('tableBody');
+        tableBody.innerHTML = '';
+
+        const totalCircumference = 2 * Math.PI * R_b_ext;
+        const stepDistance = totalCircumference / 8;
+
+        const points = [];
+        let maxDepth = 0;
+        let minDepth = Infinity;
+
+        // Calculate lengths for 8 standard ordinate locations around the circumference
+        for (let i = 0; i <= 8; i++) {
+            const alpha = (i * 45) * (Math.PI / 180); // 0, 45, 90, 135, 180...
+            
+            // Standard analytical pipe branching formula for fish-mouth cuts
+            const sinAlpha = Math.sin(alpha);
+            const cosAlpha = Math.cos(alpha);
+            
+            const term1 = Math.sqrt(R_h * R_h - (R_b * R_b * sinAlpha * sinAlpha));
+            const y = (term1 / Math.sin(theta)) - (R_b * cosAlpha / Math.tan(theta));
+            
+            points.push(y);
+            if (y > maxDepth) maxDepth = y;
+            if (y < minDepth) minDepth = y;
+        }
+
+        // Normalize template lines to measure from a baseline (0mm offset)
+        const templateLengths = points.map(y => y - minDepth);
+
+        // Populate table tracking positions around the wrap perimeter
+        for (let i = 0; i < 8; i++) {
+            const tr = document.createElement('tr');
+            const ptAngle = i * 45;
+            const distAround = i * stepDistance;
+            
+            tr.innerHTML = `
+                <td>Point ${i} (${ptAngle}°)</td>
+                <td>${distAround.toFixed(1)} mm</td>
+                <td class="highlight">${templateLengths[i].toFixed(1)} mm</td>
+            `;
+            tableBody.appendChild(tr);
+        }
+
+        // Render visual path flat template wrapper layout profile
+        const rect = canvas.getBoundingClientRect();
+        const w = rect.width;
+        const h = rect.height;
+        ctx.clearRect(0, 0, w, h);
+
+        ctx.strokeStyle = '#444';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([2, 2]);
+        ctx.beginPath();
+        ctx.moveTo(20, h/2); ctx.lineTo(w - 20, h/2);
+        ctx.stroke();
+        ctx.setLineDash([]);
+
+        ctx.strokeStyle = '#00ffcc';
+        ctx.lineWidth = 3;
+        ctx.lineJoin = 'round';
+        ctx.beginPath();
+
+        const graphWidth = w - 40;
+        for (let i = 0; i <= 8; i++) {
+            const gx = 20 + (i * (graphWidth / 8));
+            // Standard scale factor to fit drawing dynamically within the preview box
+            const gy = (h / 2) + (points[i] - (maxDepth + minDepth)/2) * 1.5; 
+            if (i === 0) ctx.moveTo(gx, gy);
+            else ctx.lineTo(gx, gy);
+        }
+        ctx.stroke();
+
+        // Draw bounding labels
+        ctx.fillStyle = '#888';
+        ctx.font = '10px monospace';
+        ctx.textAlign = 'left';
+        ctx.fillText("0° (Heel)", 20, h - 10);
+        ctx.textAlign = 'center';
+        ctx.fillText("180° (Throat)", w / 2, h - 10);
+        ctx.textAlign = 'right';
+        ctx.fillText("360°", w - 20, h - 10);
+    }
+
+    // Event hooks
+    document.getElementById('headerOD').addEventListener('input', calculateBranch);
+    document.getElementById('branchOD').addEventListener('input', calculateBranch);
+    document.getElementById('thickness').addEventListener('input', calculateBranch);
+    document.getElementById('angle').addEventListener('input', calculateBranch);
+
+    window.onload = () => { resizeCanvas(); calculateBranch(); };
+    window.onresize = () => { resizeCanvas(); calculateBranch(); };
+</script>
+
+</body>
+</html>
+
